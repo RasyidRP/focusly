@@ -37,6 +37,9 @@ class MorningReminderReceiver : BroadcastReceiver() {
 
                     showNotification(context, message)
                 }
+
+                scheduleMorningReminder(context)
+
             } finally {
                 pendingResult.finish()
             }

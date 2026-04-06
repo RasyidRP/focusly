@@ -13,6 +13,8 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Rational
 import android.view.WindowManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -29,6 +31,13 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
@@ -101,6 +110,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.random.Random
 
 /**
  * Main entry point for the focusly application.
@@ -135,7 +147,16 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Check if we were launched from a finishing timer
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                val overlayIntent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+                startActivity(overlayIntent)
+            }
+        }
+
         incomingTaskId.value = intent.getStringExtra("SHOW_FULLSCREEN_TASK_ID")
 
         setContent {
@@ -149,14 +170,13 @@ class MainActivity : ComponentActivity() {
                 val runningTask = tasks.find { it.isRunning }
                 isTaskRunning = runningTask != null
 
-                // Intercept the intent task ID to instantly pop up full screen
                 val extraTaskId by incomingTaskId.collectAsState()
                 var fullScreenTaskId by remember { mutableStateOf<String?>(null) }
 
                 LaunchedEffect(extraTaskId) {
                     if (extraTaskId != null) {
                         fullScreenTaskId = extraTaskId
-                        incomingTaskId.value = null // Clear it so it doesn't trigger repeatedly
+                        incomingTaskId.value = null
                     }
                 }
 
@@ -568,11 +588,38 @@ fun FullAppUI(
 
     val isHighlightDone = tasksFlow.any { it.category == TaskCategory.HIGHLIGHT && it.isCompleted }
 
+    val quotes = remember {
+        listOf(
+            "Let's make 1% progress today.",
+            "Focus on the signal, ignore the noise.",
+            "Action precedes motivation. Just start.",
+            "Momentum is built in the micro-commitments.",
+            "One step at a time.",
+            "Small inputs lead to massive outputs.",
+            "Embrace the process. Ignore the overwhelm.",
+            "Clear the fog. Execute the next step.",
+            "Clarity comes from action, not overthinking.",
+            "Done is absolutely better than perfect.",
+            "You don't need to feel like it to do it.",
+            "Discipline equals freedom. Do the work.",
+            "Protect your focus at all costs.",
+            "The hardest part is just sitting down.",
+            "Don't break the chain. Keep moving.",
+            "Start small, but start right now.",
+            "Trust the framework.",
+            "Kaizen: Continuous, incremental improvement.",
+            "Win the micro-battles.",
+            "Lower the stakes. Just take the next step."
+        )
+    }
+
+    val activeQuote = remember(completedCount) { quotes.random() }
+
     val greeting = when {
         totalActionableCount == 0 -> "A fresh canvas. Add a Highlight to begin."
-        completedCount == totalActionableCount -> "Day complete. Time to recharge."
-        isHighlightDone -> "Highlight secured. Great momentum."
-        else -> "Let's make 1% progress today."
+        totalActionableCount > 0 && completedCount == totalActionableCount -> "Day complete. Time to recharge."
+        isHighlightDone && completedCount == 1 -> "Highlight secured. Great momentum."
+        else -> activeQuote
     }
 
     var showReviewDialog by remember { mutableStateOf(false) }
@@ -581,243 +628,266 @@ fun FullAppUI(
 
     val currentStreak = calculateStreak(taskHistory)
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = 32.dp, bottom = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(painter = painterResource(id = R.drawable.header_logo), contentDescription = null, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.primary), modifier = Modifier.size(36.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = "focusly.", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+    var showConfetti by remember { mutableStateOf(false) }
 
-                AnimatedVisibility(visible = currentStreak > 0) {
-                    Row {
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFF5B735).copy(alpha = 0.15f)) {
-                            Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Whatshot, contentDescription = "Streak", tint = Color(0xFFF5B735), modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "$currentStreak", style = MaterialTheme.typography.titleMedium, color = Color(0xFFF5B735), fontWeight = FontWeight.Bold)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = 32.dp, bottom = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(painter = painterResource(id = R.drawable.header_logo), contentDescription = null, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.primary), modifier = Modifier.size(36.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "focusly.", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+
+                    AnimatedVisibility(visible = currentStreak > 0) {
+                        Row {
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFF5B735).copy(alpha = 0.15f)) {
+                                Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Whatshot, contentDescription = "Streak", tint = Color(0xFFF5B735), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(text = "$currentStreak", style = MaterialTheme.typography.titleMedium, color = Color(0xFFF5B735), fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            Row {
-                IconButton(
-                    onClick = onOpenInfo,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(Icons.Default.Info, contentDescription = "Tips", tint = MaterialTheme.colorScheme.primary)
-                }
-                IconButton(
-                    onClick = onOpenAnalytics,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(Icons.Default.BarChart, contentDescription = "Analytics", tint = MaterialTheme.colorScheme.primary)
-                }
-                IconButton(
-                    onClick = onOpenSettings,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp).fillMaxWidth(),
-                horizontalAlignment = Alignment.Start
-            ) {
-                Text(greeting, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Daily Progress", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-                    Text("$completedCount / $totalActionableCount Tasks", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-
-                LinearProgressIndicator(
-                    progress = { animatedProgress },
-                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                    strokeCap = StrokeCap.Round
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column {
-                        Text("Remaining", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                        Text(formatSeconds(totalSeconds), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Row {
+                    IconButton(
+                        onClick = onOpenInfo,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = "Tips", tint = MaterialTheme.colorScheme.primary)
                     }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("Predicted Finish", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                        Text(formatPredictedTime(currentTimeMillis, totalSeconds), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    IconButton(
+                        onClick = onOpenAnalytics,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(Icons.Default.BarChart, contentDescription = "Analytics", tint = MaterialTheme.colorScheme.primary)
+                    }
+                    IconButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-        AnimatedVisibility(
-            visible = staleTasks.isNotEmpty(),
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
             Card(
-                onClick = { showReviewDialog = true },
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Column(
+                    modifier = Modifier.padding(20.dp).fillMaxWidth(),
+                    horizontalAlignment = Alignment.Start
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Weekly Review", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                        Text("${staleTasks.size} tasks are stagnating. Time to clean up.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                    Text(greeting, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Daily Progress", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                        Text("$completedCount / $totalActionableCount Tasks", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                     }
-                    Icon(Icons.Default.ArrowForward, contentDescription = "Review", tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    LinearProgressIndicator(
+                        progress = { animatedProgress },
+                        modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                        strokeCap = StrokeCap.Round
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column {
+                            Text("Remaining", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            Text(formatSeconds(totalSeconds), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Predicted Finish", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            Text(formatPredictedTime(currentTimeMillis, totalSeconds), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
                 }
             }
-        }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(0.8f),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(
-                onClick = { showAddDialog = true },
-                modifier = Modifier.height(50.dp).weight(1f),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Add Task", fontSize = 18.sp)
-            }
+            Spacer(modifier = Modifier.height(20.dp))
 
             AnimatedVisibility(
-                visible = completedCount > 0,
-                enter = fadeIn() + expandHorizontally(),
-                exit = fadeOut() + shrinkHorizontally()
+                visible = staleTasks.isNotEmpty(),
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
             ) {
-                Row {
-                    Spacer(modifier = Modifier.width(12.dp))
-                    OutlinedButton(
-                        onClick = { viewModel.clearCompletedTasks() },
-                        modifier = Modifier.height(50.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Gray)
+                Card(
+                    onClick = { showReviewDialog = true },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Clear Done")
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        LazyColumn(
-            state = state.listState,
-            modifier = Modifier.fillMaxWidth().weight(1f).reorderable(state),
-            contentPadding = PaddingValues(bottom = 16.dp)
-        ) {
-            if (highlightIds.isNotEmpty()) {
-                item(key = "header_highlights") { Text("Daily Highlight", style = MaterialTheme.typography.titleSmall, color = Color.Gray, modifier = Modifier.padding(bottom = 4.dp, start = 4.dp)) }
-                items(highlightIds, key = { it }) { id ->
-                    taskDataMap[id]?.let { task ->
-                        ReorderableItem(reorderableState = state, key = task.id) { isDragging ->
-                            TaskItem(
-                                task = task, isDragging = isDragging, canToggleTimer = task.isRunning || !isAnyTaskRunning,
-                                onToggleComplete = { viewModel.toggleTaskCompletion(task) },
-                                onTogglePlayPause = {
-                                    val intent = Intent(context, TimerService::class.java).apply {
-                                        action = if (task.isRunning) TimerService.ACTION_STOP else TimerService.ACTION_START
-                                        putExtra(TimerService.EXTRA_TASK_ID, task.id)
-                                    }
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
-                                    viewModel.toggleTaskRunning(task)
-                                },
-                                onDelete = { viewModel.deleteTask(task) },
-                                dragModifier = Modifier.detectReorder(state), onEditClick = { onEditClick(task) },
-                                predictedFinishTime = getPredictedFinishTime(task.id), onEnterFullScreen = { onEnterFullScreen(task.id) }
-                            )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Weekly Review", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            Text("${staleTasks.size} tasks are stagnating. Time to clean up.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                         }
+                        Icon(Icons.Default.ArrowForward, contentDescription = "Review", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
-                item(key = "spacer_highlights") { Spacer(modifier = Modifier.height(16.dp)) }
             }
 
-            if (microIds.isNotEmpty()) {
-                item(key = "header_micros") { Text("Micro-Commitments", style = MaterialTheme.typography.titleSmall, color = Color.Gray, modifier = Modifier.padding(bottom = 4.dp, start = 4.dp)) }
-                items(microIds, key = { it }) { id ->
-                    taskDataMap[id]?.let { task ->
-                        ReorderableItem(reorderableState = state, key = task.id) { isDragging ->
-                            TaskItem(
-                                task = task, isDragging = isDragging, canToggleTimer = task.isRunning || !isAnyTaskRunning,
-                                onToggleComplete = { viewModel.toggleTaskCompletion(task) },
-                                onTogglePlayPause = {
-                                    val intent = Intent(context, TimerService::class.java).apply {
-                                        action = if (task.isRunning) TimerService.ACTION_STOP else TimerService.ACTION_START
-                                        putExtra(TimerService.EXTRA_TASK_ID, task.id)
-                                    }
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
-                                    viewModel.toggleTaskRunning(task)
-                                },
-                                onDelete = { viewModel.deleteTask(task) },
-                                dragModifier = Modifier.detectReorder(state), onEditClick = { onEditClick(task) },
-                                predictedFinishTime = getPredictedFinishTime(task.id), onEnterFullScreen = { onEnterFullScreen(task.id) }
-                            )
-                        }
-                    }
+            val configuration = LocalConfiguration.current
+            val paddedScreenWidth = configuration.screenWidthDp.dp - 40.dp
+            val rowWidth = paddedScreenWidth * 0.9f
+            val halfButtonWidth = (rowWidth - 12.dp) / 2f
+
+            Row(
+                modifier = Modifier.fillMaxWidth(0.9f),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = { showAddDialog = true },
+                    modifier = Modifier.height(50.dp).weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Add Task", fontSize = 18.sp)
                 }
-                item(key = "spacer_micros") { Spacer(modifier = Modifier.height(16.dp)) }
-            }
 
-            if (standardIds.isNotEmpty() && (highlightIds.isNotEmpty() || microIds.isNotEmpty())) {
-                item(key = "header_standards") { Text("Tasks & Brain Dumps", style = MaterialTheme.typography.titleSmall, color = Color.Gray, modifier = Modifier.padding(bottom = 4.dp, start = 4.dp)) }
-            }
-            items(standardIds, key = { it }) { id ->
-                taskDataMap[id]?.let { task ->
-                    ReorderableItem(reorderableState = state, key = task.id) { isDragging ->
-                        TaskItem(
-                            task = task, isDragging = isDragging, canToggleTimer = task.isRunning || !isAnyTaskRunning,
-                            onToggleComplete = { viewModel.toggleTaskCompletion(task) },
-                            onTogglePlayPause = {
-                                val intent = Intent(context, TimerService::class.java).apply {
-                                    action = if (task.isRunning) TimerService.ACTION_STOP else TimerService.ACTION_START
-                                    putExtra(TimerService.EXTRA_TASK_ID, task.id)
-                                }
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
-                                viewModel.toggleTaskRunning(task)
+                AnimatedVisibility(
+                    visible = completedCount > 0,
+                    enter = expandHorizontally(expandFrom = Alignment.Start),
+                    exit = shrinkHorizontally(shrinkTowards = Alignment.Start)
+                ) {
+                    Row {
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Button(
+                            onClick = {
+                                showConfetti = true
+                                viewModel.clearCompletedTasks()
                             },
-                            onDelete = { viewModel.deleteTask(task) },
-                            dragModifier = Modifier.detectReorder(state), onEditClick = { onEditClick(task) },
-                            predictedFinishTime = getPredictedFinishTime(task.id), onEnterFullScreen = { onEnterFullScreen(task.id) }
-                        )
+                            modifier = Modifier
+                                .height(50.dp)
+                                .width(halfButtonWidth),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White,
+                                contentColor = Color.Black
+                            )
+                        ) {
+                            Text("Clear Done", fontSize = 18.sp)
+                        }
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            LazyColumn(
+                state = state.listState,
+                modifier = Modifier.fillMaxWidth().weight(1f).reorderable(state),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+                if (highlightIds.isNotEmpty()) {
+                    item(key = "header_highlights") { Text("Daily Highlight", style = MaterialTheme.typography.titleSmall, color = Color.Gray, modifier = Modifier.padding(bottom = 4.dp, start = 4.dp)) }
+                    items(highlightIds, key = { it }) { id ->
+                        taskDataMap[id]?.let { task ->
+                            ReorderableItem(reorderableState = state, key = task.id) { isDragging ->
+                                TaskItem(
+                                    task = task, isDragging = isDragging, canToggleTimer = task.isRunning || !isAnyTaskRunning,
+                                    onToggleComplete = { viewModel.toggleTaskCompletion(task) },
+                                    onTogglePlayPause = {
+                                        val intent = Intent(context, TimerService::class.java).apply {
+                                            action = if (task.isRunning) TimerService.ACTION_STOP else TimerService.ACTION_START
+                                            putExtra(TimerService.EXTRA_TASK_ID, task.id)
+                                        }
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
+                                        viewModel.toggleTaskRunning(task)
+                                    },
+                                    onDelete = { viewModel.deleteTask(task) },
+                                    dragModifier = Modifier.detectReorder(state), onEditClick = { onEditClick(task) },
+                                    predictedFinishTime = getPredictedFinishTime(task.id), onEnterFullScreen = { onEnterFullScreen(task.id) }
+                                )
+                            }
+                        }
+                    }
+                    item(key = "spacer_highlights") { Spacer(modifier = Modifier.height(16.dp)) }
+                }
+
+                if (microIds.isNotEmpty()) {
+                    item(key = "header_micros") { Text("Micro-Commitments", style = MaterialTheme.typography.titleSmall, color = Color.Gray, modifier = Modifier.padding(bottom = 4.dp, start = 4.dp)) }
+                    items(microIds, key = { it }) { id ->
+                        taskDataMap[id]?.let { task ->
+                            ReorderableItem(reorderableState = state, key = task.id) { isDragging ->
+                                TaskItem(
+                                    task = task, isDragging = isDragging, canToggleTimer = task.isRunning || !isAnyTaskRunning,
+                                    onToggleComplete = { viewModel.toggleTaskCompletion(task) },
+                                    onTogglePlayPause = {
+                                        val intent = Intent(context, TimerService::class.java).apply {
+                                            action = if (task.isRunning) TimerService.ACTION_STOP else TimerService.ACTION_START
+                                            putExtra(TimerService.EXTRA_TASK_ID, task.id)
+                                        }
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
+                                        viewModel.toggleTaskRunning(task)
+                                    },
+                                    onDelete = { viewModel.deleteTask(task) },
+                                    dragModifier = Modifier.detectReorder(state), onEditClick = { onEditClick(task) },
+                                    predictedFinishTime = getPredictedFinishTime(task.id), onEnterFullScreen = { onEnterFullScreen(task.id) }
+                                )
+                            }
+                        }
+                    }
+                    item(key = "spacer_micros") { Spacer(modifier = Modifier.height(16.dp)) }
+                }
+
+                if (standardIds.isNotEmpty() && (highlightIds.isNotEmpty() || microIds.isNotEmpty())) {
+                    item(key = "header_standards") { Text("Tasks & Brain Dumps", style = MaterialTheme.typography.titleSmall, color = Color.Gray, modifier = Modifier.padding(bottom = 4.dp, start = 4.dp)) }
+                }
+                items(standardIds, key = { it }) { id ->
+                    taskDataMap[id]?.let { task ->
+                        ReorderableItem(reorderableState = state, key = task.id) { isDragging ->
+                            TaskItem(
+                                task = task, isDragging = isDragging, canToggleTimer = task.isRunning || !isAnyTaskRunning,
+                                onToggleComplete = { viewModel.toggleTaskCompletion(task) },
+                                onTogglePlayPause = {
+                                    val intent = Intent(context, TimerService::class.java).apply {
+                                        action = if (task.isRunning) TimerService.ACTION_STOP else TimerService.ACTION_START
+                                        putExtra(TimerService.EXTRA_TASK_ID, task.id)
+                                    }
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
+                                    viewModel.toggleTaskRunning(task)
+                                },
+                                onDelete = { viewModel.deleteTask(task) },
+                                dragModifier = Modifier.detectReorder(state), onEditClick = { onEditClick(task) },
+                                predictedFinishTime = getPredictedFinishTime(task.id), onEnterFullScreen = { onEnterFullScreen(task.id) }
+                            )
+                        }
+                    }
+                }
+            }
+        } // End of main Column
+
+        if (showConfetti) {
+            ConfettiBurst(modifier = Modifier.fillMaxSize()) {
+                showConfetti = false
+            }
         }
-    }
+    } // End of Box
 
     if (showAddDialog) {
         TaskEditorDialog(
@@ -963,7 +1033,6 @@ fun SettingsScreen(viewModel: TaskViewModel, onBack: () -> Unit) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                     Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("Import Backup", style = MaterialTheme.typography.bodyLarge, color = Color.White)
-                        // Uses */* as a fallback because some Android file managers struggle with application/json mapping
                         TextButton(onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) }) {
                             Text("Import", color = MaterialTheme.colorScheme.primary)
                         }
@@ -988,7 +1057,7 @@ fun SettingsScreen(viewModel: TaskViewModel, onBack: () -> Unit) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                     Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Version History", style = MaterialTheme.typography.bodyLarge, color = Color.White)
-                        Text("v2.0.0", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                        Text("v2.1.1", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                     }
                 }
             }
@@ -1019,8 +1088,28 @@ fun SettingsScreen(viewModel: TaskViewModel, onBack: () -> Unit) {
             onDismissRequest = { showTermsDialog = false },
             containerColor = MaterialTheme.colorScheme.surface,
             title = { Text("Terms & Conditions", color = MaterialTheme.colorScheme.primary) },
-            text = { Text("By using focusly, you agree to master your tasks, embrace Kaizen, and take it one percent at a time. All data stays completely offline and local on your device. No tracking, no syncing.", color = Color.White) },
-            confirmButton = { TextButton(onClick = { showTermsDialog = false }) { Text("I Agree", color = MaterialTheme.colorScheme.primary) } }
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        text = "Last Updated: April 6, 2026\n\n" +
+                                "1. Privacy & Data Storage\n" +
+                                "focusly. operates on a strictly offline-first architecture. All task data, analytics, and preferences are stored locally on your device via an encrypted database. We do not track, collect, or transmit any personal telemetry to external servers. If you uninstall the app without exporting your Data Vault, your history is permanently deleted.\n\n" +
+                                "2. System Permissions & Overrides\n" +
+                                "To function as a strict productivity enforcer, this application utilizes high-level Android APIs, including WakeLocks, Foreground Services, and System Alert Windows (Draw Over Other Apps). By using focusly., you consent to the app bypassing standard battery optimization (Doze Mode) to wake your device and interrupt your screen usage when deep-work timers conclude.\n\n" +
+                                "3. Limitation of Liability\n" +
+                                "This software is provided 'as is', without warranty of any kind. The developer is not liable for missed deadlines, failed alarms resulting from OS-level throttling, or accidental data loss.\n\n" +
+                                "4. The Kaizen Agreement\n" +
+                                "By tapping 'I Agree', you commit to prioritizing the signal over the noise, mastering your workflow, and taking it 1% at a time.",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showTermsDialog = false }) {
+                    Text("I Agree", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                }
+            }
         )
     }
 
@@ -1091,9 +1180,9 @@ fun TaskItem(
     }
 
     val iconTint = when (task.category) {
-        TaskCategory.HIGHLIGHT -> Color(0xFFF5B735) // Yellow
-        TaskCategory.MICRO_COMMITMENT -> Color(0xFFF5B735) // Yellow
-        TaskCategory.BRAIN_DUMP -> Color.White // White
+        TaskCategory.HIGHLIGHT -> Color(0xFFF5B735)
+        TaskCategory.MICRO_COMMITMENT -> Color(0xFFF5B735)
+        TaskCategory.BRAIN_DUMP -> Color.White
         TaskCategory.STANDARD -> animatedContentColor
     }
 
@@ -1261,20 +1350,9 @@ fun TaskItem(
                             Icon(Icons.Default.Delete, contentDescription = "Delete", tint = animatedContentColor, modifier = Modifier.size(24.dp))
                         }
                     }
-                } else {
-                    // Just show a delete button for a clean completed task look
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        IconButton(onClick = { onDelete() }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Gray, modifier = Modifier.size(20.dp))
-                        }
-                    }
                 }
             }
 
-            // Hide the drag handle if the task is completed
             if (!task.isCompleted) {
                 Icon(
                     imageVector = Icons.Default.Menu,
@@ -1283,7 +1361,7 @@ fun TaskItem(
                     modifier = dragModifier.padding(start = 8.dp)
                 )
             } else {
-                Spacer(modifier = Modifier.width(32.dp)) // Maintain spacing
+                Spacer(modifier = Modifier.width(32.dp))
             }
         }
     }
@@ -1730,12 +1808,19 @@ fun scheduleMorningReminder(context: Context) {
         calendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
     }
 
-    alarmManager.setInexactRepeating(
-        AlarmManager.RTC_WAKEUP,
-        calendar.timeInMillis,
-        AlarmManager.INTERVAL_DAY,
-        pendingIntent
-    )
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        alarmManager.setExactAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            calendar.timeInMillis,
+            pendingIntent
+        )
+    } else {
+        alarmManager.setExact(
+            AlarmManager.RTC_WAKEUP,
+            calendar.timeInMillis,
+            pendingIntent
+        )
+    }
 }
 
 @Composable
@@ -1842,6 +1927,81 @@ fun FrameworkCard(
                     Text(point.first, style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(point.second, style = MaterialTheme.typography.bodyMedium, color = Color.LightGray)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Lightweight physics engine for a celebratory confetti burst.
+ */
+data class Particle(
+    val xVel: Float,
+    val yVel: Float,
+    val color: Color,
+    val size: Float,
+    val isCircle: Boolean,
+    val rotSpeed: Float
+)
+
+@Composable
+fun ConfettiBurst(modifier: Modifier = Modifier, onFinished: () -> Unit) {
+    val animatable = remember { Animatable(0f) }
+
+    // --- UPGRADED: 150 particles bursting in all directions ---
+    val particles = remember {
+        List(150) {
+            val angle = Math.toRadians(Random.nextDouble(0.0, 360.0)) // Full circle explosion
+            val speed = Random.nextDouble(1500.0, 6000.0) // Much higher speed to hit screen edges
+
+            Particle(
+                xVel = (cos(angle) * speed).toFloat(),
+                yVel = (sin(angle) * speed).toFloat(),
+                color = listOf(Color(0xFFF5B735), Color.White, Color(0xFFFFD700)).random(), // Added a little gold variance
+                size = Random.nextFloat() * 24f + 12f, // Slightly larger pieces
+                isCircle = Random.nextBoolean(),
+                rotSpeed = Random.nextFloat() * 1080f - 540f // Faster spinning
+            )
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        // --- UPGRADED: Longer hang time ---
+        animatable.animateTo(1f, tween(2000, easing = FastOutSlowInEasing))
+        onFinished()
+    }
+
+    Canvas(modifier = modifier) {
+        val progress = animatable.value
+
+        // --- UPGRADED: Start higher up on the screen so it rains down ---
+        val startX = size.width / 2f
+        val startY = size.height / 3f
+
+        particles.forEach { p ->
+            // Velocity * Time + Gravity
+            val px = startX + (p.xVel * progress)
+            val py = startY + (p.yVel * progress) + (3500f * progress * progress) // Stronger gravity pull
+
+            val currentRotation = p.rotSpeed * progress
+
+            // Keep particles solid for the first 70% of the animation, then fade out quickly
+            val alpha = if (progress < 0.7f) 1f else (1f - progress) / 0.3f
+
+            rotate(degrees = currentRotation, pivot = Offset(px, py)) {
+                if (p.isCircle) {
+                    drawCircle(
+                        color = p.color.copy(alpha = alpha.coerceIn(0f, 1f)),
+                        radius = p.size / 2f,
+                        center = Offset(px, py)
+                    )
+                } else {
+                    drawRect(
+                        color = p.color.copy(alpha = alpha.coerceIn(0f, 1f)),
+                        topLeft = Offset(px - p.size / 2f, py - p.size / 2f),
+                        size = Size(p.size, p.size)
+                    )
                 }
             }
         }

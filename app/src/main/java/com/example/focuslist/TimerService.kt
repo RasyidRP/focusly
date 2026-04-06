@@ -14,9 +14,11 @@ import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 import kotlin.math.abs
@@ -35,11 +37,11 @@ class TimerService : Service() {
     private var timerJob: Job? = null
     private lateinit var taskDao: TaskDao
     private var currentTaskId: String? = null
-
     private var ringtone: Ringtone? = null
     private var mediaPlayer: MediaPlayer? = null
     private var vibrator: Vibrator? = null
     private var isSilenced = false
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -89,6 +91,14 @@ class TimerService : Service() {
         timerJob?.cancel()
         currentTaskId = taskId
 
+        if (wakeLock == null) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Focusly::DeepWorkWakeLock")
+        }
+        if (wakeLock?.isHeld == false) {
+            wakeLock?.acquire(12 * 60 * 60 * 1000L)
+        }
+
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putString(KEY_RUNNING_TASK_ID, taskId).apply()
 
@@ -114,7 +124,7 @@ class TimerService : Service() {
                     break
                 }
 
-                val forceFullScreen = (task.remainingSeconds == 0L && !isSilenced)
+                val forceFullScreen = (task.remainingSeconds <= 0L && !isSilenced)
                 if (forceFullScreen) {
                     startAlarm()
                 }
@@ -237,6 +247,13 @@ class TimerService : Service() {
         mediaPlayer?.release()
         mediaPlayer = null
         vibrator?.cancel()
+
+        if (wakeLock?.isHeld == true) {
+            wakeLock?.release()
+        }
+
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.cancel(2)
     }
 
     private fun createNotification(title: String, content: String, isOvertime: Boolean, forceFullScreen: Boolean, taskId: String): Notification {
@@ -279,7 +296,20 @@ class TimerService : Service() {
         val titleText = if (isOvertime) "${task.name} (Overtime!)" else task.name
         val timeText = formatSeconds(task.remainingSeconds)
         val notificationManager = getSystemService(NotificationManager::class.java)
-        notificationManager.notify(NOTIFICATION_ID, createNotification(titleText, "Time: $timeText", isOvertime, forceFullScreen, task.id))
+
+        notificationManager.notify(NOTIFICATION_ID, createNotification(titleText, "Time: $timeText", isOvertime, false, task.id))
+
+        if (forceFullScreen) {
+            notificationManager.notify(2, createNotification(titleText, "Time: $timeText", isOvertime, true, task.id))
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
+                val directLaunchIntent = Intent(this, MainActivity::class.java).apply {
+                    putExtra("SHOW_FULLSCREEN_TASK_ID", task.id)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                }
+                startActivity(directLaunchIntent)
+            }
+        }
     }
 
     private fun createNotificationChannel() {
@@ -311,7 +341,7 @@ class TimerService : Service() {
         const val ACTION_STOP = "ACTION_STOP"
         const val ACTION_SILENCE = "ACTION_SILENCE"
         const val EXTRA_TASK_ID = "EXTRA_TASK_ID"
-        const val CHANNEL_ID = "TimerServiceChannel"
+        const val CHANNEL_ID = "TimerServiceChannel_V2"
         const val NOTIFICATION_ID = 1
         private const val PREFS_NAME = "TimerServicePrefs"
         private const val KEY_RUNNING_TASK_ID = "running_task_id"
