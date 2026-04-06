@@ -5,13 +5,14 @@ A hyper-focused, offline-first task manager engineered to solve the "activation 
 Built with Kotlin and Jetpack Compose, **focusly.** abandons the guilt of traditional to-do lists. Instead, it forces users to prioritize the signal over the noise through Daily Highlights, Micro-Commitments, and deep-work timers. 
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/defca04c-9bea-4365-85df-662bf7465b22" width="220" />
-  <img src="https://github.com/user-attachments/assets/53d4f519-e876-4f6a-9eb2-ad233606d3c8" width="220" />
-  <img src="https://github.com/user-attachments/assets/c9f9a89e-612d-4e0c-be0e-ab49ffa6fea8" width="220" />
-  <img src="https://github.com/user-attachments/assets/0328c224-a74d-4e0e-9436-18e2c1cc1ae1" width="220" />
+  <img src="https://github.com/user-attachments/assets/1aca9df1-7301-4fa7-bd41-90c49d413063" width="220" />
+  <img src="https://github.com/user-attachments/assets/d012c0e0-fd83-46bc-8b5e-f7030f23b45c" width="220" />
+  <img src="https://github.com/user-attachments/assets/f145cab4-8219-4df3-9841-1873b35f9824" width="220" />
+  <img src="https://github.com/user-attachments/assets/2586e372-5664-4f67-b0c1-bb64d76676d6" width="220" />
+  <img src="https://github.com/user-attachments/assets/bfe31bd5-d387-42cf-aa0e-5ee07f6acb38" width="220" />
 </p>
 
-### [Download Latest Release (v2.0.0)](https://github.com/RasyidRP/focusly/releases/tag/v2.0.0)
+### [Download Latest Release (v2.1.1)](https://github.com/RasyidRP/focusly/releases/tag/v2.1.1)
 
 ## The Mission
 Traditional productivity apps assume you have the activation energy to start working. Staring at a massive wall of pending tasks often leads to paralysis rather than productivity. **focusly.** is designed to cut through mental fog by enforcing a strict framework:
