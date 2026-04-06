@@ -1,13 +1,19 @@
 package com.example.focuslist
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,22 +25,33 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import kotlin.math.abs
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskEditorDialog(
     initialName: String = "",
     initialHour: Int = 0,
     initialMinute: Int = 0,
     initialSecond: Int = 0,
+    initialCategory: TaskCategory = TaskCategory.STANDARD,
+    pastTasks: List<Task> = emptyList(),
     onDismiss: () -> Unit,
-    onConfirm: (String, Int, Int, Int) -> Unit
+    onConfirm: (String, Int, Int, Int, TaskCategory) -> Unit
 ) {
     var taskName by remember(initialName) { mutableStateOf(initialName) }
     var selectedHour by remember(initialHour) { mutableIntStateOf(initialHour) }
     var selectedMinute by remember(initialMinute) { mutableIntStateOf(initialMinute) }
     var selectedSecond by remember(initialSecond) { mutableIntStateOf(initialSecond) }
+    var selectedCategory by remember(initialCategory) { mutableStateOf(initialCategory) }
+    var expanded by remember { mutableStateOf(false) }
 
     val dialogTitle = if (initialName.isEmpty()) "New Task" else "Edit Task"
     val buttonText = if (initialName.isEmpty()) "Add Task" else "Save Changes"
+
+    val formatCategoryName: (String) -> String = { name ->
+        name.split("_").joinToString(" ") { word ->
+            word.lowercase().replaceFirstChar { it.uppercase() }
+        }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -72,26 +89,115 @@ fun TaskEditorDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                if (initialName.isEmpty() && pastTasks.isNotEmpty()) {
+                    val uniquePastTasks = pastTasks
+                        .sortedByDescending { it.id }
+                        .distinctBy { it.name.trim().lowercase() }
+                        .take(15)
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    LabeledWheel(label = "hours", count = 24, initialValue = selectedHour, onScroll = { selectedHour = it })
-                    LabeledWheel(label = "minutes", count = 60, initialValue = selectedMinute, onScroll = { selectedMinute = it })
-                    LabeledWheel(label = "seconds", count = 60, initialValue = selectedSecond, onScroll = { selectedSecond = it })
+                    if (uniquePastTasks.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(uniquePastTasks) { pastTask ->
+                                SuggestionChip(
+                                    onClick = {
+                                        taskName = pastTask.name
+                                        selectedCategory = pastTask.category
+
+                                        val h = (pastTask.totalSeconds / 3600).toInt()
+                                        val m = ((pastTask.totalSeconds % 3600) / 60).toInt()
+                                        val s = (pastTask.totalSeconds % 60).toInt()
+
+                                        selectedHour = h
+                                        selectedMinute = m
+                                        selectedSecond = s
+                                    },
+                                    label = { Text(pastTask.name) },
+                                    icon = { Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                    colors = SuggestionChipDefaults.suggestionChipColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Category",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.Gray
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { expanded = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(formatCategoryName(selectedCategory.name))
+                        }
+
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false },
+                            modifier = Modifier.fillMaxWidth(0.8f)
+                        ) {
+                            TaskCategory.entries.forEach { category ->
+                                DropdownMenuItem(
+                                    text = { Text(formatCategoryName(category.name)) },
+                                    onClick = {
+                                        selectedCategory = category
+                                        expanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                AnimatedVisibility(
+                    visible = selectedCategory != TaskCategory.BRAIN_DUMP,
+                    enter = expandVertically(),
+                    exit = shrinkVertically()
+                ) {
+                    Column {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            LabeledWheel(label = "hours", count = 24, initialValue = selectedHour, onScroll = { selectedHour = it })
+                            LabeledWheel(label = "minutes", count = 60, initialValue = selectedMinute, onScroll = { selectedMinute = it })
+                            LabeledWheel(label = "seconds", count = 60, initialValue = selectedSecond, onScroll = { selectedSecond = it })
+                        }
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
                     onClick = {
                         if (taskName.isNotBlank()) {
-                            if (selectedHour + selectedMinute + selectedSecond > 0) {
-                                onConfirm(taskName, selectedHour, selectedMinute, selectedSecond)
-                            }
+                            val finalH = if (selectedCategory == TaskCategory.BRAIN_DUMP) 0 else selectedHour
+                            val finalM = if (selectedCategory == TaskCategory.BRAIN_DUMP) 0 else selectedMinute
+                            val finalS = if (selectedCategory == TaskCategory.BRAIN_DUMP) 0 else selectedSecond
+
+                            onConfirm(taskName, finalH, finalM, finalS, selectedCategory)
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -121,6 +227,13 @@ fun WheelPicker(count: Int, startIndex: Int, rowCount: Int, onScrollFinished: (I
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = startIndex)
     val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
     val itemHeight = 50.dp
+
+    LaunchedEffect(startIndex) {
+        if (!listState.isScrollInProgress) {
+            listState.scrollToItem(startIndex)
+        }
+    }
+
     LaunchedEffect(listState.isScrollInProgress) {
         if (!listState.isScrollInProgress) {
             val layoutInfo = listState.layoutInfo
@@ -136,6 +249,7 @@ fun WheelPicker(count: Int, startIndex: Int, rowCount: Int, onScrollFinished: (I
             }
         }
     }
+
     Box(modifier = Modifier.height(itemHeight * rowCount).width(80.dp), contentAlignment = Alignment.Center) {
         Surface(modifier = Modifier.fillMaxWidth().height(itemHeight), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)) {}
         LazyColumn(state = listState, flingBehavior = flingBehavior, horizontalAlignment = Alignment.CenterHorizontally, contentPadding = PaddingValues(vertical = itemHeight * (rowCount / 2)), modifier = Modifier.fillMaxSize()) {
