@@ -1043,6 +1043,13 @@ fun SettingsScreen(viewModel: TaskViewModel, onBack: () -> Unit) {
             Text("About", style = MaterialTheme.typography.titleSmall, color = Color.Gray, modifier = Modifier.padding(bottom = 8.dp, start = 4.dp))
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
                 Column {
+                    SettingsRowItem("Support the Developer ☕") {
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            data = Uri.parse("https://buymeacoffee.com/rasyidrp")
+                        }
+                        context.startActivity(intent)
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                     SettingsRowItem("Send Feedback") {
                         val intent = Intent(Intent.ACTION_SENDTO).apply {
                             data = android.net.Uri.parse("mailto:thenameis.rasyid@gmail.com")
@@ -1057,7 +1064,7 @@ fun SettingsScreen(viewModel: TaskViewModel, onBack: () -> Unit) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                     Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Version History", style = MaterialTheme.typography.bodyLarge, color = Color.White)
-                        Text("v2.1.1", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                        Text("v2.1.2", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                     }
                 }
             }
