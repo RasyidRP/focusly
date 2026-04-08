@@ -1,6 +1,6 @@
 # focusly.
 
-A hyper-focused, offline-first task manager engineered to solve the "activation energy" problem for neurodivergent brains. 
+A hyper-focused, offline-first task manager engineered to cut through the noise and solve the 'activation energy' problem.
 
 Built with Kotlin and Jetpack Compose, **focusly.** abandons the guilt of traditional to-do lists. Instead, it forces users to prioritize the signal over the noise through Daily Highlights, Micro-Commitments, and deep-work timers. 
 
@@ -12,7 +12,7 @@ Built with Kotlin and Jetpack Compose, **focusly.** abandons the guilt of tradit
   <img src="https://github.com/user-attachments/assets/bfe31bd5-d387-42cf-aa0e-5ee07f6acb38" width="220" />
 </p>
 
-### [Download Latest Release (v2.1.1)](https://github.com/RasyidRP/focusly/releases/tag/v2.1.1)
+### [Download Latest Release (v2.1.2)](https://github.com/RasyidRP/focusly/releases/tag/v2.1.2)
 
 ## The Mission
 Traditional productivity apps assume you have the activation energy to start working. Staring at a massive wall of pending tasks often leads to paralysis rather than productivity. **focusly.** is designed to cut through mental fog by enforcing a strict framework:
