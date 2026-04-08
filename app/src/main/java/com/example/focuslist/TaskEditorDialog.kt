@@ -1,5 +1,8 @@
 package com.example.focuslist
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -19,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -190,16 +194,37 @@ fun TaskEditorDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                val isTimedCategory = selectedCategory != TaskCategory.BRAIN_DUMP
+                val currentTotalSecs = (selectedHour * 3600) + (selectedMinute * 60) + selectedSecond
+
+                val isSaveEnabled = taskName.isNotBlank() && (!isTimedCategory || currentTotalSecs > 0)
+
+                val animatedButtonColor by animateColorAsState(
+                    targetValue = if (isSaveEnabled) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.3f),
+                    animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                    label = "Save Button Color"
+                )
+                val animatedTextColor by animateColorAsState(
+                    targetValue = if (isSaveEnabled) MaterialTheme.colorScheme.onPrimary else Color.Gray,
+                    animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                    label = "Save Button Text Color"
+                )
+
                 Button(
                     onClick = {
-                        if (taskName.isNotBlank()) {
-                            val finalH = if (selectedCategory == TaskCategory.BRAIN_DUMP) 0 else selectedHour
-                            val finalM = if (selectedCategory == TaskCategory.BRAIN_DUMP) 0 else selectedMinute
-                            val finalS = if (selectedCategory == TaskCategory.BRAIN_DUMP) 0 else selectedSecond
+                        val finalH = if (selectedCategory == TaskCategory.BRAIN_DUMP) 0 else selectedHour
+                        val finalM = if (selectedCategory == TaskCategory.BRAIN_DUMP) 0 else selectedMinute
+                        val finalS = if (selectedCategory == TaskCategory.BRAIN_DUMP) 0 else selectedSecond
 
-                            onConfirm(taskName, finalH, finalM, finalS, selectedCategory)
-                        }
+                        onConfirm(taskName, finalH, finalM, finalS, selectedCategory)
                     },
+                    enabled = isSaveEnabled,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = animatedButtonColor,
+                        contentColor = animatedTextColor,
+                        disabledContainerColor = animatedButtonColor,
+                        disabledContentColor = animatedTextColor
+                    ),
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     shape = RoundedCornerShape(8.dp)
                 ) {

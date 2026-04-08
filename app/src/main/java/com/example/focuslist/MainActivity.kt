@@ -22,7 +22,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
@@ -33,7 +36,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -243,6 +250,12 @@ fun FocusListApp(
 
     val silencedTaskIds = remember { mutableStateListOf<String>() }
     val allTaskHistory by viewModel.allTaskHistory.collectAsState()
+    LaunchedEffect(tasksFlow) {
+        silencedTaskIds.removeAll { id ->
+            val task = tasksFlow.find { it.id == id }
+            task != null && task.remainingSeconds > 0
+        }
+    }
 
     var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -365,18 +378,48 @@ fun FullScreenTaskUI(
     onEditClick: () -> Unit,
     onMinimize: () -> Unit
 ) {
-    val isOvertime = task.remainingSeconds < 0
-    val progress = if (task.totalSeconds > 0 && !isOvertime) {
+    val isOvertime = task.remainingSeconds <= 0 && task.totalSeconds > 0
+    val timerColor = if (isOvertime) Color(0xFFE2231E) else MaterialTheme.colorScheme.primary
+    val finishTimeColor = if (isOvertime) Color(0xFFE2231E) else Color.Gray
+
+    val currentMathProgress = if (task.totalSeconds > 0 && !isOvertime) {
         task.remainingSeconds.toFloat() / task.totalSeconds.toFloat()
     } else 0f
 
-    val timerColor = if (isOvertime) Color.Red else MaterialTheme.colorScheme.primary
-    val finishTimeColor = if (isOvertime) Color.Red.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+    val animatedProgress = remember { Animatable(currentMathProgress) }
 
-    val animatedCircleBackgroundColor by animateColorAsState(
-        targetValue = if (task.isRunning) LightGrey else DarkGrey,
-        animationSpec = tween(durationMillis = 150),
-        label = "Timer Background Color Animation"
+    LaunchedEffect(task.isRunning, task.remainingSeconds, isOvertime) {
+        if (isOvertime) {
+            animatedProgress.snapTo(0f)
+        } else if (task.isRunning) {
+            val nextSecondProgress = if (task.totalSeconds > 0) {
+                kotlin.math.max(0f, (task.remainingSeconds - 1).toFloat() / task.totalSeconds.toFloat())
+            } else 0f
+
+            animatedProgress.animateTo(
+                targetValue = nextSecondProgress,
+                animationSpec = tween(durationMillis = 1000, easing = LinearEasing)
+            )
+        } else {
+            animatedProgress.stop()
+        }
+    }
+
+    val haloAlpha by animateFloatAsState(
+        targetValue = if (task.isRunning) 0.15f else 0f,
+        animationSpec = tween(durationMillis = 1000, easing = LinearEasing),
+        label = "Halo Alpha"
+    )
+
+    val infiniteTransition = rememberInfiniteTransition(label = "breathing")
+    val breathingScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "Breathing Scale"
     )
 
     val predictedFinishTime = formatPredictedTime(currentTimeMillis, task.remainingSeconds)
@@ -401,9 +444,36 @@ fun FullScreenTaskUI(
             }
         }
 
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.weight(1f).aspectRatio(1f).background(color = animatedCircleBackgroundColor, shape = CircleShape)) {
-            CircularProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxSize(), color = timerColor, strokeWidth = 16.dp, trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), strokeCap = StrokeCap.Round)
-            Text(formatSeconds(task.remainingSeconds), style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Bold, color = timerColor)
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.weight(1f).aspectRatio(1f)) {
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .scale(breathingScale)
+                    .background(color = timerColor.copy(alpha = haloAlpha), shape = CircleShape)
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(color = MaterialTheme.colorScheme.surface, shape = CircleShape)
+            )
+
+            CircularProgressIndicator(
+                progress = { animatedProgress.value },
+                modifier = Modifier.fillMaxSize(),
+                color = timerColor,
+                strokeWidth = 16.dp,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                strokeCap = StrokeCap.Round
+            )
+
+            Text(
+                formatSeconds(task.remainingSeconds),
+                style = MaterialTheme.typography.displayLarge,
+                fontWeight = FontWeight.Bold,
+                color = timerColor
+            )
         }
 
         Row(modifier = Modifier.padding(bottom = 64.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
@@ -412,7 +482,7 @@ fun FullScreenTaskUI(
                     Icon(
                         imageVector = Icons.Default.NotificationsOff,
                         contentDescription = "Silence Alarm",
-                        tint = if (isSilenced) Color.Gray else Color.Red.copy(alpha = 0.8f),
+                        tint = if (isSilenced) Color.Gray else Color(0xFFE2231E).copy(alpha = 0.8f),
                         modifier = Modifier.size(32.dp)
                     )
                 }
@@ -458,7 +528,7 @@ fun PiPTaskUI(runningTask: Task?) {
                     text = formatSeconds(runningTask.remainingSeconds),
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
-                    color = if (isOvertime) Color.Red else Color.LightGray
+                    color = if (isOvertime) Color(0xFFE2231E) else Color.LightGray
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -880,14 +950,14 @@ fun FullAppUI(
                     }
                 }
             }
-        } // End of main Column
+        }
 
         if (showConfetti) {
             ConfettiBurst(modifier = Modifier.fillMaxSize()) {
                 showConfetti = false
             }
         }
-    } // End of Box
+    }
 
     if (showAddDialog) {
         TaskEditorDialog(
@@ -971,14 +1041,15 @@ fun SettingsScreen(viewModel: TaskViewModel, onBack: () -> Unit) {
             Text("Alarm Preferences", style = MaterialTheme.typography.titleSmall, color = Color.Gray, modifier = Modifier.padding(bottom = 8.dp, start = 4.dp))
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
                 Column {
-                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("Enable Sound", style = MaterialTheme.typography.bodyLarge, color = Color.White)
                         Switch(checked = soundEnabled, onCheckedChange = { soundEnabled = it; prefs.edit().putBoolean("sound_enabled", it).apply() }, colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary, checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)))
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column {
                             Text("Custom Sound", style = MaterialTheme.typography.bodyLarge, color = Color.White)
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(if (customAlarmUri == null) "Default Android Alarm" else "Custom Audio Set", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                         }
                         Row {
@@ -989,7 +1060,7 @@ fun SettingsScreen(viewModel: TaskViewModel, onBack: () -> Unit) {
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("Enable Vibration", style = MaterialTheme.typography.bodyLarge, color = Color.White)
                         Switch(checked = vibrateEnabled, onCheckedChange = { vibrateEnabled = it; prefs.edit().putBoolean("vibrate_enabled", it).apply() }, colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary, checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)))
                     }
@@ -999,9 +1070,10 @@ fun SettingsScreen(viewModel: TaskViewModel, onBack: () -> Unit) {
             Text("Daily Primer", style = MaterialTheme.typography.titleSmall, color = Color.Gray, modifier = Modifier.padding(bottom = 8.dp, start = 4.dp))
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
                 Column {
-                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column {
                             Text("Highlight Reminder", style = MaterialTheme.typography.bodyLarge, color = Color.White)
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(reminderTimeDisplay, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                         }
                         TextButton(onClick = { showTimePicker = true }) {
@@ -1009,7 +1081,7 @@ fun SettingsScreen(viewModel: TaskViewModel, onBack: () -> Unit) {
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("Test Reminder Now", style = MaterialTheme.typography.bodyLarge, color = Color.White)
                         TextButton(onClick = {
                             val intent = Intent(context, MorningReminderReceiver::class.java)
@@ -1024,14 +1096,14 @@ fun SettingsScreen(viewModel: TaskViewModel, onBack: () -> Unit) {
             Text("Data Vault", style = MaterialTheme.typography.titleSmall, color = Color.Gray, modifier = Modifier.padding(bottom = 8.dp, start = 4.dp))
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
                 Column {
-                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("Export Backup", style = MaterialTheme.typography.bodyLarge, color = Color.White)
                         TextButton(onClick = { exportLauncher.launch("focusly_backup.json") }) {
                             Text("Export", color = MaterialTheme.colorScheme.primary)
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("Import Backup", style = MaterialTheme.typography.bodyLarge, color = Color.White)
                         TextButton(onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) }) {
                             Text("Import", color = MaterialTheme.colorScheme.primary)
@@ -1064,7 +1136,7 @@ fun SettingsScreen(viewModel: TaskViewModel, onBack: () -> Unit) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                     Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Version History", style = MaterialTheme.typography.bodyLarge, color = Color.White)
-                        Text("v2.1.2", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                        Text("v2.1.3", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                     }
                 }
             }
@@ -1161,23 +1233,24 @@ fun TaskItem(
 ) {
     val context = LocalContext.current
 
-    val animatedContainerColor by animateColorAsState(
-        targetValue = if (task.isRunning) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surface,
-        animationSpec = tween(durationMillis = 150),
-        label = "Card Container Color Animation"
+    val animatedBorderColor by animateColorAsState(
+        targetValue = if (task.isRunning) Color.Gray else Color.Transparent,
+        animationSpec = tween(
+            durationMillis = 250,
+            easing = FastOutSlowInEasing
+        ),
+        label = "Card Border Color Animation"
     )
-    val animatedContentColor by animateColorAsState(
-        targetValue = if (task.isRunning) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurface,
-        animationSpec = tween(durationMillis = 150),
-        label = "Card Content Color Animation"
-    )
+
+    val animatedContainerColor = MaterialTheme.colorScheme.surface
+    val animatedContentColor = MaterialTheme.colorScheme.onSurface
 
     val elevation = if (isDragging) 8.dp else 2.dp
     val isOvertime = task.remainingSeconds < 0
     val elapsedSeconds = max(0L, task.totalSeconds - task.remainingSeconds)
 
     val secondLineStyle = MaterialTheme.typography.bodySmall
-    val secondLineColor = if(isOvertime) Color.Red.copy(alpha=0.7f) else animatedContentColor.copy(alpha = 0.6f)
+    val secondLineColor = if(isOvertime) Color(0xFFE2231E).copy(alpha=0.7f) else animatedContentColor.copy(alpha = 0.6f)
 
     val categoryIcon = when (task.category) {
         TaskCategory.HIGHLIGHT -> Icons.Default.Star
@@ -1196,7 +1269,8 @@ fun TaskItem(
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = animatedContainerColor, contentColor = animatedContentColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = elevation)
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation),
+        border = BorderStroke(2.dp, animatedBorderColor)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
@@ -1254,7 +1328,7 @@ fun TaskItem(
                             text = formatSeconds(task.remainingSeconds),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = if (isOvertime) Color.Red else animatedContentColor
+                            color = if (isOvertime) Color(0xFFE2231E) else animatedContentColor
                         )
                     }
                 }
@@ -1586,34 +1660,12 @@ fun AnalyticsScreen(
                 ) {
                     Column(modifier = Modifier.padding(vertical = 20.dp)) {
                         Text("Daily Time Log", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 20.dp))
-                        Spacer(modifier = Modifier.height(12.dp))
 
-                        LazyRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = PaddingValues(horizontal = 20.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(availableDates) { date ->
-                                val isSelected = date == selectedDate
-                                val dayOfWeek = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
-                                val dayOfMonth = date.dayOfMonth.toString()
-
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    onClick = { selectedDate = date },
-                                    modifier = Modifier.width(56.dp).height(64.dp)
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Text(dayOfWeek.uppercase(), style = MaterialTheme.typography.labelSmall, color = if (isSelected) MaterialTheme.colorScheme.onPrimary else Color.Gray)
-                                        Text(dayOfMonth, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = if (isSelected) MaterialTheme.colorScheme.onPrimary else Color.White)
-                                    }
-                                }
-                            }
-                        }
+                        DailyLogSelector(
+                            loggedDates = availableDates,
+                            selectedDate = selectedDate,
+                            onDateSelected = { selectedDate = it }
+                        )
 
                         Spacer(modifier = Modifier.height(16.dp))
 
@@ -1956,44 +2008,38 @@ data class Particle(
 fun ConfettiBurst(modifier: Modifier = Modifier, onFinished: () -> Unit) {
     val animatable = remember { Animatable(0f) }
 
-    // --- UPGRADED: 150 particles bursting in all directions ---
     val particles = remember {
         List(150) {
-            val angle = Math.toRadians(Random.nextDouble(0.0, 360.0)) // Full circle explosion
-            val speed = Random.nextDouble(1500.0, 6000.0) // Much higher speed to hit screen edges
+            val angle = Math.toRadians(Random.nextDouble(0.0, 360.0))
+            val speed = Random.nextDouble(1500.0, 6000.0)
 
             Particle(
                 xVel = (cos(angle) * speed).toFloat(),
                 yVel = (sin(angle) * speed).toFloat(),
-                color = listOf(Color(0xFFF5B735), Color.White, Color(0xFFFFD700)).random(), // Added a little gold variance
-                size = Random.nextFloat() * 24f + 12f, // Slightly larger pieces
+                color = listOf(Color(0xFFF5B735), Color.White, Color(0xFFFFD700)).random(),
+                size = Random.nextFloat() * 24f + 12f,
                 isCircle = Random.nextBoolean(),
-                rotSpeed = Random.nextFloat() * 1080f - 540f // Faster spinning
+                rotSpeed = Random.nextFloat() * 1080f - 540f
             )
         }
     }
 
     LaunchedEffect(Unit) {
-        // --- UPGRADED: Longer hang time ---
         animatable.animateTo(1f, tween(2000, easing = FastOutSlowInEasing))
         onFinished()
     }
 
     Canvas(modifier = modifier) {
         val progress = animatable.value
-
-        // --- UPGRADED: Start higher up on the screen so it rains down ---
         val startX = size.width / 2f
         val startY = size.height / 3f
 
         particles.forEach { p ->
-            // Velocity * Time + Gravity
             val px = startX + (p.xVel * progress)
-            val py = startY + (p.yVel * progress) + (3500f * progress * progress) // Stronger gravity pull
+            val py = startY + (p.yVel * progress) + (3500f * progress * progress)
 
             val currentRotation = p.rotSpeed * progress
 
-            // Keep particles solid for the first 70% of the animation, then fade out quickly
             val alpha = if (progress < 0.7f) 1f else (1f - progress) / 0.3f
 
             rotate(degrees = currentRotation, pivot = Offset(px, py)) {

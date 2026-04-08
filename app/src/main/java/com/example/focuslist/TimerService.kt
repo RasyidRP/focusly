@@ -55,9 +55,11 @@ class TimerService : Service() {
             ACTION_START -> {
                 val taskId = intent.getStringExtra(EXTRA_TASK_ID)
                 if (taskId != null) {
-                    if (currentTaskId != taskId) {
-                        isSilenced = false
-                    }
+                    val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    val silencedId = prefs.getString(KEY_SILENCED_TASK_ID, null)
+
+                    isSilenced = (taskId == silencedId)
+
                     startTimer(taskId)
                 }
             }
@@ -69,6 +71,9 @@ class TimerService : Service() {
                 isSilenced = true
                 stopAlarm()
                 currentTaskId?.let { taskId ->
+                    val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    prefs.edit().putString(KEY_SILENCED_TASK_ID, taskId).apply()
+
                     serviceScope.launch {
                         taskDao.getTaskById(taskId)?.let { updateNotification(it) }
                     }
@@ -122,6 +127,12 @@ class TimerService : Service() {
                 if (task == null || task.isCompleted) {
                     stopTimer()
                     break
+                }
+
+                if (task.remainingSeconds > 0 && isSilenced) {
+                    isSilenced = false
+                    val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    prefs.edit().remove(KEY_SILENCED_TASK_ID).apply()
                 }
 
                 val forceFullScreen = (task.remainingSeconds <= 0L && !isSilenced)
@@ -345,6 +356,7 @@ class TimerService : Service() {
         const val NOTIFICATION_ID = 1
         private const val PREFS_NAME = "TimerServicePrefs"
         private const val KEY_RUNNING_TASK_ID = "running_task_id"
+        private const val KEY_SILENCED_TASK_ID = "silenced_task_id"
     }
 
     override fun onBind(intent: Intent?): IBinder? {

@@ -7,14 +7,14 @@ plugins {
 
 android {
     namespace = "com.example.focuslist"
-    compileSdk = 34 // Adjusted to stable 34, as 36 might be too experimental
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.focuslist"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "2.1.2"
+        versionCode = 4
+        versionName = "2.1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
