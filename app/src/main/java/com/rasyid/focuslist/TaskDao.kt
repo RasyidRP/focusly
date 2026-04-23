@@ -1,4 +1,4 @@
-package com.example.focuslist
+package com.rasyid.focuslist
 
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow

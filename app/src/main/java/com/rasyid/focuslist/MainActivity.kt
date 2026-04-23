@@ -1,4 +1,4 @@
-package com.example.focuslist
+package com.rasyid.focuslist
 
 import android.Manifest
 import android.app.Activity
@@ -25,7 +25,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
@@ -49,10 +48,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -97,16 +94,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.focuslist.ui.theme.DarkGrey
-import com.example.focuslist.ui.theme.FocusListTheme
-import com.example.focuslist.ui.theme.LightGrey
+import com.rasyid.focuslist.ui.theme.FocusListTheme
 import org.burnoutcrew.reorderable.ReorderableItem
 import org.burnoutcrew.reorderable.detectReorder
 import org.burnoutcrew.reorderable.rememberReorderableLazyListState
 import org.burnoutcrew.reorderable.reorderable
 import java.time.LocalDate
-import java.time.format.TextStyle
-import java.util.Calendar
 import java.util.Locale
 import java.time.Instant
 import java.time.ZoneId
@@ -188,14 +181,16 @@ class MainActivity : ComponentActivity() {
                 }
 
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    FocusListApp(
-                        viewModel = viewModel,
-                        tasksFlow = tasks,
-                        runningTask = runningTask,
-                        isInPiPMode = isInPiPModeState,
-                        fullScreenTaskId = fullScreenTaskId,
-                        onSetFullScreenTask = { fullScreenTaskId = it }
-                    )
+                    Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
+                        FocusListApp(
+                            viewModel = viewModel,
+                            tasksFlow = tasks,
+                            runningTask = runningTask,
+                            isInPiPMode = isInPiPModeState,
+                            fullScreenTaskId = fullScreenTaskId,
+                            onSetFullScreenTask = { fullScreenTaskId = it }
+                        )
+                    }
                 }
             }
         }

@@ -1,4 +1,4 @@
-package com.example.focuslist.ui.theme
+package com.rasyid.focuslist.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
@@ -6,7 +6,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import com.example.focuslist.R
+import com.rasyid.focuslist.R
 
 val ProductSansFontFamily = FontFamily(
     Font(R.font.product_sans_regular, FontWeight.Normal),

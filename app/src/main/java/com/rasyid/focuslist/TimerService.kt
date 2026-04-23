@@ -1,4 +1,4 @@
-package com.example.focuslist
+package com.rasyid.focuslist
 
 import android.app.Notification
 import android.app.NotificationChannel

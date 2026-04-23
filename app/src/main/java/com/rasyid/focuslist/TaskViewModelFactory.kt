@@ -1,4 +1,4 @@
-package com.example.focuslist
+package com.rasyid.focuslist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider

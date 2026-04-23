@@ -6,15 +6,15 @@ plugins {
 }
 
 android {
-    namespace = "com.example.focuslist"
-    compileSdk = 34
+    namespace = "com.rasyid.focuslist"
+    compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.focuslist"
+        applicationId = "com.rasyid.focuslist"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 4
-        versionName = "2.1.3"
+        targetSdk = 35
+        versionCode = 5
+        versionName = "2.1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

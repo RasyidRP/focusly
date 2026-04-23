@@ -1,4 +1,4 @@
-package com.example.focuslist.ui.theme
+package com.rasyid.focuslist.ui.theme
 
 import android.app.Activity
 import androidx.compose.material3.MaterialTheme
